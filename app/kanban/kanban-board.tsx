@@ -235,7 +235,7 @@ export function KanbanBoard({ incidencias }) {
                                   <AvatarFallback className="text-[10px]">
                                     {incidencia.asignado
                                       .split(" ")
-                                      .map((n) => n[0])
+                                      .map((n: any[]) => n[0])
                                       .join("")}
                                   </AvatarFallback>
                                 </Avatar>

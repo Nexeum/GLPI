@@ -14,35 +14,38 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { DatePickerWithRange } from "@/app/historico/date-range-picker"
-import type { DateRange } from "react-day-picker"
 import { Download } from "lucide-react"
 
-// Componente simple de toast para asegurarnos de que funcione
+// Componente simple de toast
 function Toast({
-  message,
-  type = "info",
-  onClose,
-}: { message: string; type?: "info" | "success" | "error"; onClose: () => void }) {
+                 message,
+                 type = "info",
+                 onClose,
+               }: {
+  message: string;
+  type?: "info" | "success" | "error";
+  onClose: () => void
+}) {
   return (
-    <div
-      className={`fixed bottom-4 right-4 p-4 rounded-md shadow-lg z-50 ${
-        type === "success" ? "bg-green-500" : type === "error" ? "bg-red-500" : "bg-blue-500"
-      } text-white`}
-    >
-      <div className="flex justify-between items-center">
-        <p>{message}</p>
-        <button onClick={onClose} className="ml-4 text-white">
-          ×
-        </button>
+      <div
+          className={`fixed bottom-4 right-4 p-4 rounded-md shadow-lg z-50 ${
+              type === "success" ? "bg-green-500" : type === "error" ? "bg-red-500" : "bg-blue-500"
+          } text-white`}
+      >
+        <div className="flex justify-between items-center">
+          <p>{message}</p>
+          <button onClick={onClose} className="ml-4 text-white">
+            ×
+          </button>
+        </div>
       </div>
-    </div>
   )
 }
 
 export function ExportarDialog() {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [dateRange, setDateRange] = useState({ from: undefined, to: undefined })
   const [tipoExportacion, setTipoExportacion] = useState("todas")
   const [incluirComentarios, setIncluirComentarios] = useState(true)
   const [incluirAdjuntos, setIncluirAdjuntos] = useState(false)
@@ -60,7 +63,12 @@ export function ExportarDialog() {
     setToast(null)
   }, [])
 
-  // Función simplificada para exportar
+  // Manejador para actualizar el rango de fechas
+  const handleDateRangeChange = (range) => {
+    setDateRange(range || { from: undefined, to: undefined })
+  }
+
+  // Función para exportar
   const handleExport = useCallback(async () => {
     console.log("Iniciando exportación...")
     setIsLoading(true)
@@ -72,10 +80,10 @@ export function ExportarDialog() {
       params.append("formato", "xlsx")
       params.append("estadisticas", "true")
 
-      if (dateRange?.from) {
+      if (dateRange.from) {
         params.append("fechaDesde", dateRange.from.toISOString())
       }
-      if (dateRange?.to) {
+      if (dateRange.to) {
         params.append("fechaHasta", dateRange.to.toISOString())
       }
 
@@ -111,18 +119,17 @@ export function ExportarDialog() {
   }, [dateRange, tipoExportacion, incluirComentarios, incluirAdjuntos, showToast])
 
   return (
-    <>
-      {/* Toast simple */}
-      {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+      <>
+        {/* Toast simple */}
+        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
 
-      {/* Botón de exportar fuera del Dialog para probar si funciona independientemente */}
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="flex items-center gap-2">
-        <Download className="h-4 w-4" />
-        Exportar
-      </Button>
+        {/* Botón de exportar */}
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="flex items-center gap-2">
+          <Download className="h-4 w-4" />
+          Exportar
+        </Button>
 
-      {/* Dialog para configurar la exportación */}
-      {open && (
+        {/* Dialog para configurar la exportación */}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
@@ -134,7 +141,7 @@ export function ExportarDialog() {
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="date-range">Rango de fechas</Label>
-                <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+                <DatePickerWithRange date={dateRange} setDate={handleDateRangeChange} />
               </div>
               <div className="grid gap-2">
                 <Label>Tipo de incidencias</Label>
@@ -157,17 +164,17 @@ export function ExportarDialog() {
                 <Label>Opciones adicionales</Label>
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="incluir-comentarios"
-                    checked={incluirComentarios}
-                    onCheckedChange={(checked) => setIncluirComentarios(!!checked)}
+                      id="incluir-comentarios"
+                      checked={incluirComentarios}
+                      onCheckedChange={(checked) => setIncluirComentarios(checked === true)}
                   />
                   <Label htmlFor="incluir-comentarios">Incluir comentarios</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="incluir-adjuntos"
-                    checked={incluirAdjuntos}
-                    onCheckedChange={(checked) => setIncluirAdjuntos(!!checked)}
+                      id="incluir-adjuntos"
+                      checked={incluirAdjuntos}
+                      onCheckedChange={(checked) => setIncluirAdjuntos(checked === true)}
                   />
                   <Label htmlFor="incluir-adjuntos">Incluir lista de adjuntos</Label>
                 </div>
@@ -177,19 +184,12 @@ export function ExportarDialog() {
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>
-              <Button
-                onClick={() => {
-                  console.log("Botón de exportar clickeado")
-                  handleExport()
-                }}
-                disabled={isLoading}
-              >
+              <Button onClick={handleExport} disabled={isLoading}>
                 {isLoading ? "Exportando..." : "Exportar a Excel"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
-    </>
+      </>
   )
 }

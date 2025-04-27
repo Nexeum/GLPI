@@ -5,7 +5,6 @@ import { ModernHeader } from "@/components/layout/modern-header"
 import { ExportarDialog } from "@/components/incidencias/exportar-dialog"
 
 export default async function HistoricoPage() {
-  // Obtener datos reales de Supabase
   const incidenciasResueltas = await getIncidenciasResueltas()
 
   return (

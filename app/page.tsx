@@ -1,5 +1,3 @@
-"use client"
-
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { PlusCircle, BarChart3, LineChart, PieChart } from "lucide-react"
@@ -18,12 +16,12 @@ export default async function Dashboard() {
     const estadisticas = await getEstadisticasIncidencias()
 
     // Obtener incidencias con ANS próximo a vencer
-    const incidenciasANSRiesgo = incidenciasActivas.filter((inc) => inc.ans_estado === "En riesgo").slice(0, 3)
+    const incidenciasANSRiesgo = incidenciasActivas.filter((inc: { ans_estado: string }) => inc.ans_estado === "En riesgo").slice(0, 3)
 
     // Obtener últimas incidencias resueltas
     const ultimasResueltas = incidenciasResueltas
       .sort(
-        (a, b) =>
+        (a: { fecha_solucion: any; fecha_creacion: any }, b: { fecha_solucion: any; fecha_creacion: any }) =>
           new Date(b.fecha_solucion || b.fecha_creacion).getTime() -
           new Date(a.fecha_solucion || a.fecha_creacion).getTime(),
       )
