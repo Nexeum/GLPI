@@ -25,6 +25,60 @@ async function executeSupabaseQuery(queryFn) {
   }
 }
 
+// Función para calcular el tiempo restante
+function actualizarTiempoRestante(incidencia: Incidencia): Incidencia {
+  const prioridad = incidencia.prioridad
+  const fechaCreacion = new Date(incidencia.fecha_creacion)
+  let tiempoLimiteEnHoras = 0
+
+  switch (prioridad) {
+    case ANS_PRIORIDAD.ALTA:
+      tiempoLimiteEnHoras = 4
+      break
+    case ANS_PRIORIDAD.MEDIA:
+      tiempoLimiteEnHoras = 8
+      break
+    case ANS_PRIORIDAD.BAJA:
+      tiempoLimiteEnHoras = 24
+      break
+    default:
+      tiempoLimiteEnHoras = 24 // Valor por defecto
+  }
+
+  const fechaLimite = new Date(fechaCreacion)
+  let horasAgregadas = 0
+
+  while (horasAgregadas < tiempoLimiteEnHoras) {
+    fechaLimite.setHours(fechaLimite.getHours() + 1)
+    const fechaTemporal = new Date(fechaLimite) // Crear una nueva instancia de Date
+
+    if (!esFinDeSemana(fechaTemporal) && !esFestivoEnColombia(fechaTemporal)) {
+      horasAgregadas++
+    }
+  }
+
+  const ahora = new Date()
+  const tiempoRestanteEnMilisegundos = fechaLimite.getTime() - ahora.getTime()
+  const tiempoRestanteEnHoras = tiempoRestanteEnMilisegundos / (1000 * 60 * 60)
+
+  // Formatear el tiempo restante
+  let tiempoRestanteFormateado = ""
+  if (tiempoRestanteEnHoras >= 24) {
+    tiempoRestanteFormateado = `${Math.floor(tiempoRestanteEnHoras / 24)} días`
+  } else if (tiempoRestanteEnHoras >= 1) {
+    tiempoRestanteFormateado = `${Math.floor(tiempoRestanteEnHoras)} horas`
+  } else if (tiempoRestanteEnMilisegundos > 0) {
+    tiempoRestanteFormateado = "Menos de 1 hora"
+  } else {
+    tiempoRestanteFormateado = "Tiempo excedido"
+  }
+
+  return {
+    ...incidencia,
+    tiempo_restante: tiempoRestanteFormateado,
+  }
+}
+
 // Obtener todas las incidencias
 export async function getIncidencias() {
   try {
@@ -126,294 +180,255 @@ export async function getIncidenciaPorId(id: string) {
   }
 }
 
-// Modificar la función actualizarTiempoRestante para cambiar "Nosotros" por "LinkTIC"
-function actualizarTiempoRestante(incidencia: Incidencia): Incidencia {
-  if (!incidencia) {
-    return null
+// Crear una nueva incidencia
+export async function crearIncidencia(incidencia: Incidencia) {
+  const { data, error } = await executeSupabaseQuery(() =>
+    supabaseServer.from("incidencias").insert([incidencia]).select().single(),
+  )
+
+  if (error) {
+    console.error("Error al crear incidencia:", error)
+    throw new Error(`Error al crear incidencia: ${error.message}`)
   }
 
-  // Primero, cambiamos "Nosotros" por "LinkTIC" si es necesario
-  if (incidencia.propietario === "Nosotros") {
-    incidencia.propietario = "LinkTIC"
-  }
-
-  if (incidencia.estado === "Resuelto" || !incidencia.fecha_creacion) {
-    return incidencia
-  }
-
-  // El resto de la función sigue igual...
-  const ahora = new Date()
-  const fechaCreacion = new Date(incidencia.fecha_creacion)
-
-  // Obtener el ANS en horas según la prioridad
-  let horasANS = 24 // Por defecto 24 horas
-
-  if (incidencia.prioridad === "INDISPONIBILIDAD") horasANS = 1
-  else if (incidencia.prioridad === "CRÍTICA") horasANS = 2
-  else if (incidencia.prioridad === "ALTA") horasANS = 8
-  else if (incidencia.prioridad === "ESTÁNDAR") horasANS = 12
-  else if (incidencia.prioridad === "BAJA") horasANS = 24
-
-  // Calcular la fecha límite
-  const fechaLimite = new Date(fechaCreacion)
-  fechaLimite.setHours(fechaLimite.getHours() + horasANS)
-
-  // Calcular la diferencia en milisegundos
-  const diferencia = fechaLimite.getTime() - ahora.getTime()
-
-  // Si ya pasó el tiempo, está en riesgo
-  if (diferencia <= 0) {
-    const tiempoExcedido = Math.abs(diferencia)
-    const horasExcedidas = Math.floor(tiempoExcedido / (1000 * 60 * 60))
-    const minutosExcedidos = Math.floor((tiempoExcedido % (1000 * 60 * 60)) / (1000 * 60))
-
-    return {
-      ...incidencia,
-      tiempo_restante: `Excedido por ${horasExcedidas}h ${minutosExcedidos}m`,
-      ans_estado: "En riesgo",
-    }
-  }
-
-  // Calcular horas y minutos restantes
-  const horasRestantes = Math.floor(diferencia / (1000 * 60 * 60))
-  const minutosRestantes = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60))
-
-  // Determinar el estado del ANS
-  let ansEstado = "En tiempo"
-
-  // Si queda menos del 25% del tiempo, está en riesgo
-  const tiempoTotal = horasANS * 60 * 60 * 1000
-  const porcentajeRestante = (diferencia / tiempoTotal) * 100
-
-  if (porcentajeRestante < 25) {
-    ansEstado = "En riesgo"
-  }
-
-  return {
-    ...incidencia,
-    tiempo_restante: `${horasRestantes}h ${minutosRestantes}m`,
-    ans_estado: ansEstado,
-  }
-}
-
-// Modificar la función crearIncidencia para manejar la creación de usuarios
-export async function crearIncidencia(incidencia: Omit<Incidencia, "id">) {
-  try {
-    // Si se proporciona un correo, verificar si el usuario existe
-    if (incidencia.correo) {
-      const { data: usuarioExistente } = await executeSupabaseQuery(() =>
-        supabaseServer.from("usuarios").select("*").eq("correo", incidencia.correo).single(),
-      )
-
-      // Si el usuario no existe, crearlo primero
-      if (!usuarioExistente) {
-        const { error: errorUsuario } = await executeSupabaseQuery(() =>
-          supabaseServer.from("usuarios").insert({
-            correo: incidencia.correo,
-            nombre: incidencia.nombre || "Usuario sin nombre",
-          }),
-        )
-
-        if (errorUsuario) {
-          console.error("Error al crear usuario:", errorUsuario)
-          throw new Error(`Error al crear usuario: ${errorUsuario.message}`)
-        }
-      }
-    }
-
-    // Generar ID para la incidencia (formato INC-XXXX)
-    const { count } = await executeSupabaseQuery(() =>
-      supabaseServer.from("incidencias").select("*", { count: "exact", head: true }),
-    )
-
-    const nuevoId = `INC-${(count || 0) + 1000 + 1}`
-
-    // Asignar ANS según prioridad
-    const tiempoANS = ANS_PRIORIDAD[incidencia.prioridad] || "24h"
-
-    const nuevaIncidencia = {
-      ...incidencia,
-      id: nuevoId,
-      fecha_creacion: new Date().toISOString(),
-      fecha_radicado: new Date().toISOString(),
-      tiempo_restante: tiempoANS,
-      ans_estado: "En tiempo",
-    }
-
-    const { data, error } = await executeSupabaseQuery(() =>
-      supabaseServer.from("incidencias").insert(nuevaIncidencia).select(),
-    )
-
-    if (error) {
-      console.error("Error al crear incidencia:", error)
-      throw new Error(`Error al crear incidencia: ${error.message}`)
-    }
-
-    revalidatePath("/incidencias")
-    revalidatePath("/")
-    return data[0]
-  } catch (error) {
-    console.error("Error inesperado al crear incidencia:", error)
-    throw error
-  }
+  revalidatePath("/incidencias")
+  return data
 }
 
 // Actualizar una incidencia
-export async function actualizarIncidencia(id: string, incidencia: Partial<Incidencia>) {
-  try {
-    // Si se actualiza la prioridad, actualizar el tiempo ANS
-    if (incidencia.prioridad && ANS_PRIORIDAD[incidencia.prioridad]) {
-      incidencia.tiempo_restante = ANS_PRIORIDAD[incidencia.prioridad]
-    }
+export async function actualizarIncidencia(id: string, updates: Partial<Incidencia>) {
+  const { data, error } = await executeSupabaseQuery(() =>
+    supabaseServer.from("incidencias").update(updates).eq("id", id).select().single(),
+  )
 
-    // Si se cambia el estado a "Resuelto", establecer la fecha de solución
-    if (incidencia.estado === "Resuelto" && !incidencia.fecha_solucion) {
-      incidencia.fecha_solucion = new Date().toISOString()
-    }
-
-    const { data, error } = await executeSupabaseQuery(() =>
-      supabaseServer.from("incidencias").update(incidencia).eq("id", id).select(),
-    )
-
-    if (error) {
-      console.error(`Error al actualizar incidencia ${id}:`, error)
-      throw new Error(`Error al actualizar incidencia ${id}: ${error.message}`)
-    }
-
-    revalidatePath(`/incidencias/${id}`)
-    revalidatePath("/incidencias")
-    revalidatePath("/historico")
-    revalidatePath("/")
-
-    return data[0]
-  } catch (error) {
-    console.error(`Error inesperado al actualizar incidencia ${id}:`, error)
-    throw error
+  if (error) {
+    console.error(`Error al actualizar incidencia ${id}:`, error)
+    throw new Error(`Error al actualizar incidencia ${id}: ${error.message}`)
   }
+
+  revalidatePath(`/incidencias/${id}`)
+  revalidatePath("/incidencias")
+  revalidatePath("/kanban")
+  return data
 }
 
 // Eliminar una incidencia
 export async function eliminarIncidencia(id: string) {
-  try {
-    const { error } = await executeSupabaseQuery(() => supabaseServer.from("incidencias").delete().eq("id", id))
+  const { error } = await executeSupabaseQuery(() => supabaseServer.from("incidencias").delete().eq("id", id))
 
-    if (error) {
-      console.error(`Error al eliminar incidencia ${id}:`, error)
-      throw new Error(`Error al eliminar incidencia ${id}: ${error.message}`)
-    }
-
-    revalidatePath("/incidencias")
-    revalidatePath("/historico")
-    revalidatePath("/")
-    return true
-  } catch (error) {
-    console.error(`Error inesperado al eliminar incidencia ${id}:`, error)
-    throw error
+  if (error) {
+    console.error(`Error al eliminar incidencia ${id}:`, error)
+    throw new Error(`Error al eliminar incidencia ${id}: ${error.message}`)
   }
+
+  revalidatePath("/incidencias")
+  return true
 }
 
-// Obtener estadísticas para el dashboard
+// Función para obtener estadísticas de incidencias
 export async function getEstadisticasIncidencias() {
   try {
-    const incidenciasActivas = await getIncidenciasActivas()
-    const incidenciasResueltas = await getIncidenciasResueltas()
-
     // Total de incidencias
-    const totalIncidencias = incidenciasActivas.length + incidenciasResueltas.length
+    const { count: totalIncidencias, error: totalError } = await supabaseServer
+      .from("incidencias")
+      .select("*", { count: "exact", head: true })
 
-    // Incidencias por prioridad
-    const incidenciasPorPrioridad = {
-      INDISPONIBILIDAD: 0,
-      CRÍTICA: 0,
-      ALTA: 0,
-      ESTÁNDAR: 0,
-      BAJA: 0,
+    if (totalError) {
+      console.error("Error al obtener total de incidencias:", totalError)
+      throw new Error(`Error al obtener total de incidencias: ${totalError.message}`)
     }
 
-    incidenciasActivas.forEach((inc) => {
-      if (inc.prioridad && incidenciasPorPrioridad[inc.prioridad] !== undefined) {
-        incidenciasPorPrioridad[inc.prioridad]++
-      }
+    // Incidencias resueltas
+    const { count: incidenciasResueltas, error: resueltasError } = await supabaseServer
+      .from("incidencias")
+      .select("*", { count: "exact", head: true })
+      .eq("estado", "Resuelto")
+
+    if (resueltasError) {
+      console.error("Error al obtener incidencias resueltas:", resueltasError)
+      throw new Error(`Error al obtener incidencias resueltas: ${resueltasError.message}`)
+    }
+
+    // Incidencias activas
+    const { count: incidenciasActivas, error: activasError } = await supabaseServer
+      .from("incidencias")
+      .select("*", { count: "exact", head: true })
+      .not("estado", "eq", "Resuelto")
+
+    if (activasError) {
+      console.error("Error al obtener incidencias activas:", activasError)
+      throw new Error(`Error al obtener incidencias activas: ${activasError.message}`)
+    }
+
+    // Incidencias por prioridad
+    const { data: incidenciasPorPrioridadData, error: prioridadError } = await supabaseServer
+      .from("incidencias")
+      .select("prioridad")
+
+    if (prioridadError) {
+      console.error("Error al obtener incidencias por prioridad:", prioridadError)
+      throw new Error(`Error al obtener incidencias por prioridad: ${prioridadError.message}`)
+    }
+
+    const incidenciasPorPrioridad = {}
+    incidenciasPorPrioridadData.forEach((item) => {
+      const prioridad = item.prioridad || "Sin prioridad"
+      incidenciasPorPrioridad[prioridad] = (incidenciasPorPrioridad[prioridad] || 0) + 1
     })
 
     // Incidencias por módulo
-    const incidenciasPorModulo = {}
-    // Inicializar contadores para cada módulo
-    const modulos = ["Cotizacion", "Emision", "Recaudo", "Facturación", "Siniestros", "Reserva", "OBP", "Novedades"]
-    modulos.forEach((modulo) => {
-      incidenciasPorModulo[modulo] = 0
-    })
+    const { data: incidenciasPorModuloData, error: moduloError } = await supabaseServer
+      .from("incidencias")
+      .select("modulo")
 
-    incidenciasActivas.forEach((inc) => {
-      if (inc.modulo && incidenciasPorModulo[inc.modulo] !== undefined) {
-        incidenciasPorModulo[inc.modulo]++
-      }
+    if (moduloError) {
+      console.error("Error al obtener incidencias por módulo:", moduloError)
+      throw new Error(`Error al obtener incidencias por módulo: ${moduloError.message}`)
+    }
+
+    const incidenciasPorModulo = {}
+    incidenciasPorModuloData.forEach((item) => {
+      const modulo = item.modulo || "Sin módulo"
+      incidenciasPorModulo[modulo] = (incidenciasPorModulo[modulo] || 0) + 1
     })
 
     // Incidencias por estado
-    const incidenciasPorEstado = {
-      Abierto: 0,
-      "En progreso": 0,
-      Resuelto: incidenciasResueltas.length,
-      "Devuelto/cancelado": 0,
+    const { data: incidenciasPorEstadoData, error: estadoError } = await supabaseServer
+      .from("incidencias")
+      .select("estado")
+
+    if (estadoError) {
+      console.error("Error al obtener incidencias por estado:", estadoError)
+      throw new Error(`Error al obtener incidencias por estado: ${estadoError.message}`)
     }
 
-    incidenciasActivas.forEach((inc) => {
-      if (inc.estado && incidenciasPorEstado[inc.estado] !== undefined) {
-        incidenciasPorEstado[inc.estado]++
-      }
+    const incidenciasPorEstado = {}
+    incidenciasPorEstadoData.forEach((item) => {
+      const estado = item.estado || "Sin estado"
+      incidenciasPorEstado[estado] = (incidenciasPorEstado[estado] || 0) + 1
     })
 
     // Incidencias por ANS
+    const { data: incidenciasPorANSData, error: ansError } = await supabaseServer
+      .from("incidencias")
+      .select("ans_estado")
+
+    if (ansError) {
+      console.error("Error al obtener incidencias por ANS:", ansError)
+      throw new Error(`Error al obtener incidencias por ANS: ${ansError.message}`)
+    }
+
     const incidenciasPorANS = {
       "En tiempo": 0,
       "En riesgo": 0,
     }
-
-    incidenciasActivas.forEach((inc) => {
-      if (inc.ans_estado === "En tiempo") {
+    incidenciasPorANSData.forEach((item) => {
+      const ansEstado = item.ans_estado
+      if (ansEstado === "En tiempo") {
         incidenciasPorANS["En tiempo"]++
-      } else if (inc.ans_estado === "En riesgo") {
+      } else if (ansEstado === "En riesgo") {
         incidenciasPorANS["En riesgo"]++
       }
     })
 
     return {
-      totalIncidencias,
-      incidenciasActivas: incidenciasActivas.length,
-      incidenciasResueltas: incidenciasResueltas.length,
-      incidenciasPorPrioridad,
-      incidenciasPorModulo,
-      incidenciasPorEstado,
-      incidenciasPorANS,
+      totalIncidencias: totalIncidencias || 0,
+      incidenciasResueltas: incidenciasResueltas || 0,
+      incidenciasActivas: incidenciasActivas || 0,
+      incidenciasPorPrioridad: incidenciasPorPrioridad,
+      incidenciasPorModulo: incidenciasPorModulo,
+      incidenciasPorEstado: incidenciasPorEstado,
+      incidenciasPorANS: incidenciasPorANS,
     }
   } catch (error) {
-    console.error("Error al obtener estadísticas:", error)
-    // Return default values to prevent page crashes
+    console.error("Error al obtener estadísticas de incidencias:", error)
     return {
       totalIncidencias: 0,
-      incidenciasActivas: 0,
       incidenciasResueltas: 0,
-      incidenciasPorPrioridad: {
-        INDISPONIBILIDAD: 0,
-        CRÍTICA: 0,
-        ALTA: 0,
-        ESTÁNDAR: 0,
-        BAJA: 0,
-      },
+      incidenciasActivas: 0,
+      incidenciasPorPrioridad: {},
       incidenciasPorModulo: {},
-      incidenciasPorEstado: {
-        Abierto: 0,
-        "En progreso": 0,
-        Resuelto: 0,
-        "Devuelto/cancelado": 0,
-      },
-      incidenciasPorANS: {
-        "En tiempo": 0,
-        "En riesgo": 0,
-      },
+      incidenciasPorEstado: {},
+      incidenciasPorANS: { "En tiempo": 0, "En riesgo": 0 },
     }
   }
 }
 
-export type { Incidencia }
+// Función para verificar si una fecha es fin de semana (sábado o domingo)
+function esFinDeSemana(fecha) {
+  const dia = fecha.getDay()
+  return dia === 0 || dia === 6 // 0 es domingo, 6 es sábado
+}
+
+// Función para verificar si una fecha es festivo en Colombia
+function esFestivoEnColombia(fecha) {
+  // Lista de festivos en Colombia para 2023-2024
+  // Formato: "MM-DD"
+  const festivosColombia = [
+    // 2023
+    "01-01",
+    "01-09",
+    "03-20",
+    "04-06",
+    "04-07",
+    "04-09",
+    "05-01",
+    "05-22",
+    "06-12",
+    "06-19",
+    "07-03",
+    "07-20",
+    "08-07",
+    "08-21",
+    "10-16",
+    "11-06",
+    "11-13",
+    "12-08",
+    "12-25",
+    // 2024
+    "01-01",
+    "01-08",
+    "03-25",
+    "03-28",
+    "03-29",
+    "03-31",
+    "05-01",
+    "05-13",
+    "06-03",
+    "06-10",
+    "07-01",
+    "07-20",
+    "08-07",
+    "08-19",
+    "10-14",
+    "11-04",
+    "11-11",
+    "12-08",
+    "12-25",
+  ]
+  const fechaFormateada = `${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`
+  return festivosColombia.includes(fechaFormateada)
+}
+
+// Obtener todas las incidencias
+export async function obtenerIncidencias() {
+  try {
+    const { data, error } = await executeSupabaseQuery(() =>
+      supabaseServer.from("incidencias").select("*").order("fecha_creacion", { ascending: false }),
+    )
+
+    if (error) {
+      console.error("Error al obtener incidencias:", error)
+      throw new Error(`Error al obtener incidencias: ${error.message}`)
+    }
+
+    // Actualizar el tiempo restante para cada incidencia
+    const incidenciasConTiempoActualizado = data.map(actualizarTiempoRestante)
+
+    return incidenciasConTiempoActualizado
+  } catch (error) {
+    console.error("Error inesperado al obtener incidencias:", error)
+    // Return empty array instead of throwing to prevent page crashes
+    return []
+  }
+}

@@ -1,11 +1,9 @@
-import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
 import { getIncidenciaPorId } from "@/lib/api/incidencias"
 import { getComentariosPorIncidencia } from "@/lib/api/comentarios"
 import { getAdjuntosPorIncidencia } from "@/lib/api/adjuntos"
 import { DetalleIncidencia } from "./detalle-incidencia"
 import { notFound } from "next/navigation"
-import { ModernHeader } from "@/components/layout/modern-header"
+import { AppHeader } from "@/components/layout/app-header"
 
 export default async function DetalleIncidenciaPage({ params }) {
   const { id } = params
@@ -23,20 +21,10 @@ export default async function DetalleIncidenciaPage({ params }) {
     const adjuntos = await getAdjuntosPorIncidencia(id)
 
     return (
-      <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900">
-        <ModernHeader activePage="incidencias" />
+      <div className="flex min-h-screen flex-col bg-[#f5f5f7] dark:bg-[#000000]">
+        <AppHeader activePage="incidencias" />
 
-        <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full">
-          <div className="mb-4 flex items-center justify-between">
-            <Link
-              href="/incidencias"
-              className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-primary"
-            >
-              <ChevronLeft className="mr-1 h-4 w-4" />
-              Volver a Incidencias
-            </Link>
-          </div>
-
+        <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full animate-fade-in">
           <DetalleIncidencia incidencia={incidencia} comentarios={comentarios} adjuntos={adjuntos} />
         </main>
       </div>

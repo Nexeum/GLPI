@@ -34,9 +34,11 @@ export type Incidencia = {
   tiempo_restante?: string
   propietario?: string
   tiene_script?: boolean
+  tiempoANS?: number // Tiempo ANS en horas laborales
+  fechaCreacion?: string // Fecha de creación en formato ISO
 }
 
-// ANS según prioridad
+// ANS según prioridad (en horas laborales)
 export const ANS_PRIORIDAD = {
   INDISPONIBILIDAD: "1h",
   CRÍTICA: "2h",
@@ -65,4 +67,12 @@ export const MODULOS = [
   "Reserva",
   "OBP",
   "Novedades",
+]
+
+export const PRIORIDADES = [
+  { valor: "INDISPONIBILIDAD", nombre: "Indisponibilidad" },
+  { valor: "CRÍTICA", nombre: "Crítica" },
+  { valor: "ALTA", nombre: "Alta" },
+  { valor: "ESTÁNDAR", nombre: "Estándar" },
+  { valor: "BAJA", nombre: "Baja" },
 ]

@@ -7,7 +7,6 @@ import { format, subMonths, getMonth, getYear } from "date-fns"
 import { es } from "date-fns/locale"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Bar, Line, Pie } from "recharts"
 import {
   ResponsiveContainer,
   BarChart,
@@ -18,9 +17,13 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  Bar,
+  Pie,
+  Line,
+  Cell,
 } from "recharts"
 
-export function DashboardCharts({ estadisticas }) {
+export function AppleCharts({ estadisticas }) {
   const [timeRange, setTimeRange] = useState("6m")
   const [chartData, setChartData] = useState({
     tendencia: [],
@@ -97,18 +100,30 @@ export function DashboardCharts({ estadisticas }) {
   // Función para formatear valores
   const valueFormatter = (value) => `${value} inc.`
 
+  // Colores para los gráficos al estilo Apple
+  const APPLE_COLORS = [
+    "#0071e3", // Azul Apple
+    "#34c759", // Verde Apple
+    "#ff9500", // Naranja Apple
+    "#ff3b30", // Rojo Apple
+    "#5ac8fa", // Azul claro Apple
+    "#af52de", // Púrpura Apple
+    "#ffcc00", // Amarillo Apple
+    "#5856d6", // Índigo Apple
+  ]
+
   return (
-    <Card className="shadow-sm border-none">
-      <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+    <Card className="apple-glass-card overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800/50">
         <div>
-          <CardTitle className="text-lg font-bold text-gray-900 dark:text-white">Análisis de Incidencias</CardTitle>
+          <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white">Análisis de Incidencias</CardTitle>
           <CardDescription>Distribución y tendencias de incidencias</CardDescription>
         </div>
         <Select value={timeRange} onValueChange={setTimeRange}>
-          <SelectTrigger className="w-[120px]">
+          <SelectTrigger className="w-[120px] apple-input">
             <SelectValue placeholder="Periodo" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="apple-glass-card">
             <SelectItem value="3m">3 meses</SelectItem>
             <SelectItem value="6m">6 meses</SelectItem>
             <SelectItem value="12m">12 meses</SelectItem>
@@ -117,12 +132,22 @@ export function DashboardCharts({ estadisticas }) {
       </CardHeader>
       <CardContent className="p-0">
         <Tabs defaultValue="tendencia" className="h-[400px]">
-          <TabsList className="grid grid-cols-5 h-9 mx-4 mt-4 mb-2 bg-gray-100 dark:bg-gray-800">
-            <TabsTrigger value="tendencia">Tendencia</TabsTrigger>
-            <TabsTrigger value="prioridad">Prioridad</TabsTrigger>
-            <TabsTrigger value="modulo">Módulo</TabsTrigger>
-            <TabsTrigger value="estado">Estado</TabsTrigger>
-            <TabsTrigger value="ans">ANS</TabsTrigger>
+          <TabsList className="flex h-10 mx-4 mt-4 mb-2 bg-gray-100/50 dark:bg-gray-800/30 rounded-full p-1 space-x-1">
+            <TabsTrigger value="tendencia" className="rounded-full flex-1">
+              Tendencia
+            </TabsTrigger>
+            <TabsTrigger value="prioridad" className="rounded-full flex-1">
+              Prioridad
+            </TabsTrigger>
+            <TabsTrigger value="modulo" className="rounded-full flex-1">
+              Módulo
+            </TabsTrigger>
+            <TabsTrigger value="estado" className="rounded-full flex-1">
+              Estado
+            </TabsTrigger>
+            <TabsTrigger value="ans" className="rounded-full flex-1">
+              ANS
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="tendencia" className="h-[350px] px-4 pb-4">
@@ -130,49 +155,60 @@ export function DashboardCharts({ estadisticas }) {
               config={{
                 Abiertas: {
                   label: "Abiertas",
-                  color: "hsl(var(--chart-1))",
+                  color: "#0071e3", // Azul Apple
                 },
                 Resueltas: {
                   label: "Resueltas",
-                  color: "hsl(var(--chart-2))",
+                  color: "#34c759", // Verde Apple
                 },
               }}
               className="h-full"
             >
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData.tendencia}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Legend />
-                  <Line type="monotone" dataKey="Abiertas" stroke="var(--color-Abiertas)" />
-                  <Line type="monotone" dataKey="Resueltas" stroke="var(--color-Resueltas)" />
+                  <Line
+                    type="monotone"
+                    dataKey="Abiertas"
+                    stroke="#0071e3"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Resueltas"
+                    stroke="#34c759"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </ChartContainer>
           </TabsContent>
 
           <TabsContent value="prioridad" className="h-[350px] px-4 pb-4">
-            <ChartContainer
-              config={{
-                value: {
-                  label: "Incidencias",
-                  color: "hsl(var(--chart-1))",
-                },
-              }}
-              className="h-full"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData.prioridad}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="value" fill="var(--color-value)" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.prioridad} barSize={40}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+                <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
+                  formatter={(value) => [`${value} incidencias`, "Cantidad"]}
+                  contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {chartData.prioridad.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={APPLE_COLORS[index % APPLE_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </TabsContent>
 
           <TabsContent value="modulo" className="h-[350px] px-4 pb-4">
@@ -184,40 +220,41 @@ export function DashboardCharts({ estadisticas }) {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={100}
+                  innerRadius={60}
                   fill="#8884d8"
+                  paddingAngle={2}
                   label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                 >
                   {chartData.modulo.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={APPLE_COLORS[index % APPLE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [`${value} incidencias`, "Cantidad"]} />
-                <Legend />
+                <Tooltip
+                  formatter={(value) => [`${value} incidencias`, "Cantidad"]}
+                  contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </TabsContent>
 
           <TabsContent value="estado" className="h-[350px] px-4 pb-4">
-            <ChartContainer
-              config={{
-                value: {
-                  label: "Incidencias",
-                  color: "hsl(var(--chart-3))",
-                },
-              }}
-              className="h-full"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData.estado}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="value" fill="var(--color-value)" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.estado} barSize={40}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+                <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
+                  formatter={(value) => [`${value} incidencias`, "Cantidad"]}
+                  contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {chartData.estado.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={APPLE_COLORS[index % APPLE_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </TabsContent>
 
           <TabsContent value="ans" className="h-[350px] px-4 pb-4">
@@ -229,16 +266,23 @@ export function DashboardCharts({ estadisticas }) {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={100}
+                  innerRadius={60}
                   fill="#8884d8"
+                  paddingAngle={2}
                   label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                 >
                   {chartData.ans.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.name === "En tiempo" ? "#4ade80" : "#ef4444"} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.name === "En tiempo" ? "#34c759" : "#ff3b30"} // Verde y Rojo Apple
+                    />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [`${value} incidencias`, "Cantidad"]} />
-                <Legend />
+                <Tooltip
+                  formatter={(value) => [`${value} incidencias`, "Cantidad"]}
+                  contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </TabsContent>
@@ -246,12 +290,4 @@ export function DashboardCharts({ estadisticas }) {
       </CardContent>
     </Card>
   )
-}
-
-// Colores para los gráficos
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82ca9d", "#ffc658", "#8dd1e1"]
-
-// Componente Cell para los gráficos de tipo Pie
-function Cell({ fill, children }) {
-  return <g fill={fill}>{children}</g>
 }

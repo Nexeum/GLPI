@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Progress } from "@/components/ui/progress"
-import { Clock, AlertTriangle, CheckCircle } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Clock, AlertTriangle, AlertCircle } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface CountdownTimerProps {
   deadline?: Date
@@ -10,6 +10,7 @@ interface CountdownTimerProps {
   isCompleted?: boolean
   ansEstado?: string
   tiempoRestante?: string
+  className?: string
 }
 
 export function CountdownTimer({
@@ -18,139 +19,126 @@ export function CountdownTimer({
   isCompleted = false,
   ansEstado,
   tiempoRestante,
+  className,
 }: CountdownTimerProps) {
-  const [timeLeft, setTimeLeft] = useState<string>("")
-  const [progress, setProgress] = useState<number>(100)
-  const [status, setStatus] = useState<"normal" | "warning" | "danger" | "completed">("normal")
+  const [tiempo, setTiempo] = useState<string>(tiempoRestante || "Calculando...")
+  const [estado, setEstado] = useState<"normal" | "riesgo" | "excedido" | "completado">(
+    isCompleted ? "completado" : "normal",
+  )
+  const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
-    // Si tenemos ansEstado y tiempoRestante directamente, usamos esos valores
-    if (ansEstado && tiempoRestante) {
-      setTimeLeft(tiempoRestante)
-      setStatus(ansEstado === "En riesgo" ? "danger" : isCompleted ? "completed" : "normal")
+    setIsClient(true)
 
-      // Calcular un progreso aproximado basado en el estado
-      if (isCompleted) {
-        setProgress(100)
-      } else if (ansEstado === "En riesgo") {
-        setProgress(25)
-      } else {
-        setProgress(75)
-      }
-
-      return
+    // Determinar el estado basado en los props
+    if (isCompleted) {
+      setEstado("completado")
+    } else if (ansEstado === "Excedido") {
+      setEstado("excedido")
+    } else if (ansEstado === "En riesgo") {
+      setEstado("riesgo")
+    } else {
+      setEstado("normal")
     }
 
-    // Si no tenemos los valores directos, calculamos basados en deadline y createdAt
-    if (!deadline || isCompleted) {
-      setTimeLeft(isCompleted ? "Completado" : "No disponible")
-      setProgress(isCompleted ? 100 : 0)
-      setStatus(isCompleted ? "completed" : "normal")
-      return
+    // Usar el tiempo restante proporcionado
+    if (tiempoRestante) {
+      setTiempo(tiempoRestante)
     }
+    // O calcular basado en deadline y createdAt si están disponibles
+    else if (deadline && createdAt) {
+      const ahora = new Date()
+      const tiempoRestanteMs = deadline.getTime() - ahora.getTime()
 
-    const calculateTimeLeft = () => {
-      const now = new Date()
-      const difference = deadline.getTime() - now.getTime()
-
-      if (difference <= 0) {
-        setTimeLeft("Vencido")
-        setProgress(0)
-        setStatus("danger")
-        return
-      }
-
-      // Calcular tiempo total desde creación hasta deadline
-      let totalTime = 0
-      if (createdAt) {
-        totalTime = deadline.getTime() - createdAt.getTime()
+      if (tiempoRestanteMs <= 0) {
+        setTiempo("Tiempo excedido")
+        setEstado("excedido")
       } else {
-        totalTime = deadline.getTime() - now.getTime() + 86400000 // Asumimos 24 horas si no hay fecha de creación
-      }
+        // Convertir a horas
+        const horas = Math.floor(tiempoRestanteMs / (1000 * 60 * 60))
+        const minutos = Math.floor((tiempoRestanteMs % (1000 * 60 * 60)) / (1000 * 60))
 
-      // Calcular tiempo transcurrido
-      const elapsed = totalTime - difference
-      const progressValue = Math.max(0, Math.min(100, 100 - (elapsed / totalTime) * 100))
-      setProgress(progressValue)
+        setTiempo(`${horas}h ${minutos}m`)
 
-      // Calcular días, horas y minutos restantes
-      const days = Math.floor(difference / (1000 * 60 * 60 * 24))
-      const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+        // Si queda menos del 20% del tiempo, está en riesgo
+        const tiempoTotal = deadline.getTime() - createdAt.getTime()
+        const porcentajeRestante = (tiempoRestanteMs / tiempoTotal) * 100
 
-      // Determinar el estado basado en el tiempo restante
-      if (days === 0 && hours < 12) {
-        setStatus(hours < 4 ? "danger" : "warning")
-      } else {
-        setStatus("normal")
-      }
-
-      // Formatear el tiempo restante
-      if (days > 0) {
-        setTimeLeft(`${days} día${days !== 1 ? "s" : ""}`)
-      } else if (hours > 0) {
-        setTimeLeft(`${hours} hora${hours !== 1 ? "s" : ""}`)
-      } else {
-        setTimeLeft(`${minutes} minuto${minutes !== 1 ? "s" : ""}`)
+        if (porcentajeRestante < 20) {
+          setEstado("riesgo")
+        }
       }
     }
 
     // Actualizar cada minuto
-    calculateTimeLeft()
-    const timer = setInterval(calculateTimeLeft, 60000)
+    const interval = setInterval(() => {
+      if (deadline && !isCompleted) {
+        const ahora = new Date()
+        const tiempoRestanteMs = deadline.getTime() - ahora.getTime()
 
-    return () => clearInterval(timer)
+        if (tiempoRestanteMs <= 0) {
+          setTiempo("Tiempo excedido")
+          setEstado("excedido")
+        } else {
+          const horas = Math.floor(tiempoRestanteMs / (1000 * 60 * 60))
+          const minutos = Math.floor((tiempoRestanteMs % (1000 * 60 * 60)) / (1000 * 60))
+
+          setTiempo(`${horas}h ${minutos}m`)
+
+          // Si queda menos del 20% del tiempo, está en riesgo
+          if (createdAt) {
+            const tiempoTotal = deadline.getTime() - createdAt.getTime()
+            const porcentajeRestante = (tiempoRestanteMs / tiempoTotal) * 100
+
+            if (porcentajeRestante < 20) {
+              setEstado("riesgo")
+            }
+          }
+        }
+      }
+    }, 60000)
+
+    return () => clearInterval(interval)
   }, [deadline, createdAt, isCompleted, ansEstado, tiempoRestante])
 
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {status === "completed" ? (
-            <CheckCircle className="h-5 w-5 text-green-500" />
-          ) : status === "danger" ? (
-            <AlertTriangle className="h-5 w-5 text-red-500" />
-          ) : (
-            <Clock className="h-5 w-5 text-blue-500" />
-          )}
-          <span
-            className={`font-medium ${
-              status === "completed"
-                ? "text-green-600"
-                : status === "danger"
-                  ? "text-red-600"
-                  : status === "warning"
-                    ? "text-amber-600"
-                    : "text-blue-600"
-            }`}
-          >
-            {timeLeft}
-          </span>
-        </div>
-        <span className="text-xs text-gray-500">ANS</span>
-      </div>
+  // Si estamos en el servidor o el componente acaba de montar, mostrar un placeholder
+  if (!isClient) {
+    return <div className={cn("text-gray-400", className)}>Calculando...</div>
+  }
 
-      <Progress
-        value={progress}
-        className={`h-2 ${
-          status === "completed"
-            ? "bg-green-100"
-            : status === "danger"
-              ? "bg-red-100"
-              : status === "warning"
-                ? "bg-amber-100"
-                : "bg-blue-100"
-        }`}
-        indicatorClassName={
-          status === "completed"
-            ? "bg-green-500"
-            : status === "danger"
-              ? "bg-red-500"
-              : status === "warning"
-                ? "bg-amber-500"
-                : "bg-blue-500"
-        }
-      />
+  // Renderizar según el estado
+  if (estado === "completado") {
+    return (
+      <div className={cn("flex items-center text-green-600 dark:text-green-400", className)}>
+        <Clock className="mr-1 h-4 w-4" />
+        <span>Completado</span>
+      </div>
+    )
+  }
+
+  if (estado === "excedido") {
+    return (
+      <div className={cn("flex items-center text-red-600 dark:text-red-400", className)}>
+        <AlertCircle className="mr-1 h-4 w-4" />
+        <span>ANS Incumplido</span>
+      </div>
+    )
+  }
+
+  if (estado === "riesgo") {
+    return (
+      <div className={cn("flex items-center text-amber-600 dark:text-amber-400", className)}>
+        <AlertTriangle className="mr-1 h-4 w-4" />
+        <span>En riesgo: {tiempo}</span>
+      </div>
+    )
+  }
+
+  // Caso normal
+  return (
+    <div className={cn("flex items-center", className)}>
+      <Clock className="mr-1 h-4 w-4" />
+      <span>{tiempo}</span>
     </div>
   )
 }
