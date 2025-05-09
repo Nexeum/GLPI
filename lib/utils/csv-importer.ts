@@ -3,6 +3,7 @@
 import { parse } from "papaparse"
 import type { Incidencia } from "../types/incidencias"
 import { crearIncidencia } from "../api/incidencias"
+import { crearComentario } from "../api/comentarios" // Importamos la función para crear comentarios
 
 // Mapeo de campos del CSV a campos de Incidencia
 const FIELD_MAPPING = {
@@ -99,13 +100,31 @@ function generarIdIncidencia(id: string): string {
   return `INC-${Math.floor(1000 + Math.random() * 9000)}`
 }
 
+// Función para extraer comentarios de la bitácora
+function extraerComentarios(bitacora: string): string[] {
+  if (!bitacora || bitacora.trim() === "") return []
+
+  // Dividir por separadores comunes en bitácoras
+  // Posibles separadores: nueva línea, punto y coma, guiones o barras seguidos de fechas
+  const comentarios = bitacora
+      .split(/\n+|;\s*|(?<=\d)\s*[-/]\s*(?=\d)/)
+      .map(comentario => comentario.trim())
+      .filter(comentario => comentario !== "")
+
+  return comentarios
+}
+
 // Función para mapear una fila del CSV a un objeto Incidencia
-function mapearFilaAIncidencia(fila: any): Partial<Incidencia> {
-  const incidencia: Partial<Incidencia> = {}
+function mapearFilaAIncidencia(fila: any): Partial<Incidencia> & { comentarios?: string[] } {
+  const incidencia: Partial<Incidencia> & { comentarios?: string[] } = {}
 
   // Mapear campos según el mapeo definido
   for (const [csvField, incidenciaField] of Object.entries(FIELD_MAPPING)) {
-    if (fila[csvField] !== undefined && fila[csvField] !== null) {
+    if (
+        fila[csvField] !== undefined &&
+        fila[csvField] !== null &&
+        String(fila[csvField]).trim() !== ""
+    ) {
       incidencia[incidenciaField] = fila[csvField]
     }
   }
@@ -115,10 +134,10 @@ function mapearFilaAIncidencia(fila: any): Partial<Incidencia> {
 
   // Mapear título (si no existe, usar los primeros 100 caracteres de la descripción)
   incidencia.titulo =
-    incidencia.titulo ||
-    (incidencia.descripcion
-      ? incidencia.descripcion.substring(0, 100) + (incidencia.descripcion.length > 100 ? "..." : "")
-      : "Sin título")
+      incidencia.titulo ||
+      (incidencia.descripcion
+          ? incidencia.descripcion.substring(0, 100) + (incidencia.descripcion.length > 100 ? "..." : "")
+          : "Sin título")
 
   // Mapear prioridad
   if (incidencia.prioridad) {
@@ -134,33 +153,22 @@ function mapearFilaAIncidencia(fila: any): Partial<Incidencia> {
     incidencia.estado = "Pendiente"
   }
 
-  // Convertir fechas
-  if (incidencia.fecha_creacion) {
-    incidencia.fecha_creacion = convertirFecha(incidencia.fecha_creacion)
-  }
+  const fechas = [
+    "hora_inicio",
+    "fecha_creacion",
+    "fecha_radicado",
+    "fecha_diagnostico",
+    "fecha_entrega_desarrollo",
+    "fecha_entrega_qa",
+    "fecha_entrega_uat",
+    "fecha_aprobado_uat",
+    "fecha_solucion",
+  ]
 
-  if (incidencia.fecha_diagnostico) {
-    incidencia.fecha_diagnostico = convertirFecha(incidencia.fecha_diagnostico)
-  }
-
-  if (incidencia.fecha_entrega_desarrollo) {
-    incidencia.fecha_entrega_desarrollo = convertirFecha(incidencia.fecha_entrega_desarrollo)
-  }
-
-  if (incidencia.fecha_entrega_qa) {
-    incidencia.fecha_entrega_qa = convertirFecha(incidencia.fecha_entrega_qa)
-  }
-
-  if (incidencia.fecha_entrega_uat) {
-    incidencia.fecha_entrega_uat = convertirFecha(incidencia.fecha_entrega_uat)
-  }
-
-  if (incidencia.fecha_aprobado_uat) {
-    incidencia.fecha_aprobado_uat = convertirFecha(incidencia.fecha_aprobado_uat)
-  }
-
-  if (incidencia.fecha_solucion) {
-    incidencia.fecha_solucion = convertirFecha(incidencia.fecha_solucion)
+  for (const campo of fechas) {
+    if (incidencia[campo]) {
+      incidencia[campo] = convertirFecha(incidencia[campo] as string)
+    }
   }
 
   // Mapear tiene_script basado en el estado
@@ -171,6 +179,13 @@ function mapearFilaAIncidencia(fila: any): Partial<Incidencia> {
     incidencia.propietario = "Sistema"
   }
 
+  // Extraer comentarios de la bitácora
+  if (incidencia.bitacora) {
+    incidencia.comentarios = extraerComentarios(incidencia.bitacora as string)
+    // Eliminamos la bitácora original ya que ahora tenemos los comentarios separados
+    delete incidencia.bitacora
+  }
+
   return incidencia
 }
 
@@ -179,6 +194,7 @@ export async function procesarArchivoCSV(fileContent: string): Promise<{
   success: boolean
   message: string
   incidenciasImportadas?: number
+  comentariosImportados?: number
   errores?: string[]
 }> {
   try {
@@ -203,8 +219,18 @@ export async function procesarArchivoCSV(fileContent: string): Promise<{
       }
     }
 
+    // 🔍 Filtrar solo las filas del aplicativo "Core Rentas"
+    const dataFiltrada = data.filter((fila: any) => fila["Aplicativo"]?.trim() === "Core de Rentas")
+
+    if (dataFiltrada.length === 0) {
+      return {
+        success: false,
+        message: "No se encontraron incidencias para el aplicativo 'Core Rentas'",
+      }
+    }
+
     // Mapear filas a incidencias
-    const incidencias = data.map(mapearFilaAIncidencia)
+    const incidencias = dataFiltrada.map(mapearFilaAIncidencia)
 
     // Validar incidencias
     const errores = []
@@ -222,12 +248,33 @@ export async function procesarArchivoCSV(fileContent: string): Promise<{
 
     // Guardar incidencias en la base de datos
     let incidenciasGuardadas = 0
+    let comentariosGuardados = 0
     const erroresGuardado = []
 
     for (const incidencia of incidenciasValidas) {
       try {
+        // Extraer comentarios antes de guardar la incidencia
+        const comentarios = incidencia.comentarios || []
+        delete incidencia.comentarios
+
+        // Guardar la incidencia
         await crearIncidencia(incidencia as Incidencia)
         incidenciasGuardadas++
+
+        // Guardar los comentarios asociados
+        for (const textoComentario of comentarios) {
+          try {
+            await crearComentario({
+              incidencia_id: incidencia.id,
+              autor: "Sistema", // O el autor que corresponda
+              texto: textoComentario,
+              fecha: new Date().toISOString() // Usamos la fecha actual
+            })
+            comentariosGuardados++
+          } catch (error) {
+            erroresGuardado.push(`Error al guardar comentario para incidencia ${incidencia.id}: ${error.message}`)
+          }
+        }
       } catch (error) {
         erroresGuardado.push(`Error al guardar incidencia ${incidencia.id}: ${error.message}`)
       }
@@ -235,8 +282,9 @@ export async function procesarArchivoCSV(fileContent: string): Promise<{
 
     return {
       success: true,
-      message: `Se importaron ${incidenciasGuardadas} de ${incidenciasValidas.length} incidencias`,
+      message: `Se importaron ${incidenciasGuardadas} incidencias con ${comentariosGuardados} comentarios`,
       incidenciasImportadas: incidenciasGuardadas,
+      comentariosImportados: comentariosGuardados,
       errores: [...errores, ...erroresGuardado],
     }
   } catch (error) {
